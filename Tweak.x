@@ -269,8 +269,13 @@ __attribute__ ((visibility ("default"))) const char** webcontent_environs()
 // Constructor
 // ============================================================
 
-//sucks ellekit doesn't sign private symbols
-void* _MSFindSymbol(MSImageRef image, const char *symbol) {
+/*
+libhooker's MSFindSymbol doesn't sign function pointers at all, 
+while rootless/ellekit's MSFindSymbol signs only all exported symbols(even data pointers). 
+the new roothide/ellekit implements signing only all code pointers (whether exported or private).
+this helper function is compatible with all of these.
+*/
+void* FindAndSignFunction(MSImageRef image, const char *symbol) {
 	void *sym = MSFindSymbol(image, symbol);
 	if (!sym) {
 		LOG("Symbol not found: %s", symbol);
@@ -316,13 +321,13 @@ void* _MSFindSymbol(MSImageRef image, const char *symbol) {
     }
 
     // Phase 2: hook Options::initialize()
-    JSC_Options_setOption1 = _MSFindSymbol(JavaScriptCore, "__ZN3JSC7Options9setOptionEPKc"); // ios15.1
-    JSC_Options_setOption2 = _MSFindSymbol(JavaScriptCore, "__ZN3JSC7Options9setOptionEPKcb"); // ios16.4
-    JSC_Options_notifyOptionsChanged = _MSFindSymbol(JavaScriptCore, "__ZN3JSC7Options20notifyOptionsChangedEv"); // ios16.4
+    JSC_Options_setOption1 = FindAndSignFunction(JavaScriptCore, "__ZN3JSC7Options9setOptionEPKc"); // ios15.1
+    JSC_Options_setOption2 = FindAndSignFunction(JavaScriptCore, "__ZN3JSC7Options9setOptionEPKcb"); // ios16.4
+    JSC_Options_notifyOptionsChanged = FindAndSignFunction(JavaScriptCore, "__ZN3JSC7Options20notifyOptionsChangedEv"); // ios16.4
     if(!JSC_Options_setOption1 && !JSC_Options_setOption2) {
         abort();
     }
-    void* JSC_Options_initialize = _MSFindSymbol(JavaScriptCore, "__ZN3JSC7Options10initializeEv");
+    void* JSC_Options_initialize = FindAndSignFunction(JavaScriptCore, "__ZN3JSC7Options10initializeEv");
     if (JSC_Options_initialize) {
         MSHookFunction(JSC_Options_initialize, (void *)hookd_JSC_Options_initialize, (void **)&orig_JSC_Options_initialize);
         LOG("Hooked Options::initialize()");
@@ -332,8 +337,8 @@ void* _MSFindSymbol(MSImageRef image, const char *symbol) {
     }
 
     // Phase 3: hook JSGlobalObject::init → haveABadTime
-    void* JSC_JSGlobalObject_init = _MSFindSymbol(JavaScriptCore, "__ZN3JSC14JSGlobalObject4initERNS_2VME");
-    JSC_JSGlobalObject_haveABadTime = _MSFindSymbol(JavaScriptCore, "__ZN3JSC14JSGlobalObject12haveABadTimeERNS_2VME");
+    void* JSC_JSGlobalObject_init = FindAndSignFunction(JavaScriptCore, "__ZN3JSC14JSGlobalObject4initERNS_2VME");
+    JSC_JSGlobalObject_haveABadTime = FindAndSignFunction(JavaScriptCore, "__ZN3JSC14JSGlobalObject12haveABadTimeERNS_2VME");
     LOG("JSC_JSGlobalObject_haveABadTime = %p", JSC_JSGlobalObject_haveABadTime);
     if (JSC_JSGlobalObject_init && JSC_JSGlobalObject_haveABadTime) {
         MSHookFunction(JSC_JSGlobalObject_init, (void *)hooked_JSC_JSGlobalObject_init, (void **)&orig_JSC_JSGlobalObject_init);

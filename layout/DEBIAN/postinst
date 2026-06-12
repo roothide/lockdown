@@ -1,3 +1,3 @@
 # #!/bin/sh
 
-killall -9 com.apple.WebKit.WebContent >> /dev/null || true
+killall -9 com.apple.WebKit.WebContent > /dev/null 2>&1 || true
